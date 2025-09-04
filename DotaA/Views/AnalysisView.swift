@@ -496,7 +496,7 @@ struct HeroAnalysisView: View {
         isLoading = true
         errorMessage = ""
         
-        openDotaService.getPlayerHeroes(accountId: currentAccountId, limit: 10)
+        openDotaService.getPlayerHeroes(accountId: currentAccountId)
             .sink(
                 receiveCompletion: { completion in
                     if case .failure(let error) = completion {
@@ -505,8 +505,20 @@ struct HeroAnalysisView: View {
                     }
                 },
                 receiveValue: { heroes in
-                    self.heroStats = heroes
+                    // Filter meaningful hero data (at least 3 games) and sort by game count
+                    let filteredHeroes = heroes
+                        .filter { $0.games >= 3 }  // Show only heroes with at least 3 games
+                        .sorted { $0.games > $1.games }  // Sort by game count descending
+                        .prefix(10)  // Show only top 10
+                    
+                    self.heroStats = Array(filteredHeroes)
                     self.isLoading = false
+                    
+                    print("🎮 Filtered hero stats: \(self.heroStats.count) heroes with games >= 3")
+                    for hero in self.heroStats.prefix(3) {
+                        let heroName = HeroService.shared.getHeroName(heroId: hero.heroId)
+                        print("  - \(heroName): \(hero.games) games, \(Int(hero.winRate * 100))% WR")
+                    }
                 }
             )
             .store(in: &cancellables)
@@ -704,7 +716,7 @@ struct ProgressReportView: View {
         errorMessage = ""
         
         let matchesPublisher = openDotaService.getRecentMatches(accountId: currentAccountId, limit: 20)
-        let heroesPublisher = openDotaService.getPlayerHeroes(accountId: currentAccountId, limit: 10)
+        let heroesPublisher = openDotaService.getPlayerHeroes(accountId: currentAccountId)
         
         Publishers.CombineLatest(matchesPublisher, heroesPublisher)
             .sink(
@@ -716,8 +728,17 @@ struct ProgressReportView: View {
                 },
                 receiveValue: { matches, heroes in
                     self.recentMatches = matches
-                    self.heroStats = heroes
+                    
+                    // Filter meaningful hero data (at least 3 games) and sort by game count
+                    let filteredHeroes = heroes
+                        .filter { $0.games >= 3 }  // Show only heroes with at least 3 games
+                        .sorted { $0.games > $1.games }  // Sort by game count descending
+                        .prefix(10)  // Show only top 10
+                    
+                    self.heroStats = Array(filteredHeroes)
                     self.isLoading = false
+                    
+                    print("📊 Progress filtered hero stats: \(self.heroStats.count) heroes with games >= 3")
                 }
             )
             .store(in: &cancellables)
@@ -763,20 +784,11 @@ struct RealWeeklySummaryView: View {
     }
     
     private func calculateWinRate() -> Double {
-        guard !matches.isEmpty else { return 0.0 }
-        let wins = matches.filter { match in
-            (match.playerSlot < 5 && match.radiantWin) || (match.playerSlot >= 5 && !match.radiantWin)
-        }.count
-        return Double(wins) / Double(matches.count)
+        return PlayerStatsCalculator.calculateWinRate(from: matches)
     }
     
     private func calculateAverageKDA() -> Double {
-        guard !matches.isEmpty else { return 0.0 }
-        let totalKDA = matches.reduce(0.0) { total, match in
-            let kda = match.deaths > 0 ? (Double(match.kills + match.assists) / Double(match.deaths)) : Double(match.kills + match.assists)
-            return total + kda
-        }
-        return totalKDA / Double(matches.count)
+        return KDACalculator.calculateAverageKDA(from: matches)
     }
     
     private func winRateDescription() -> String {
@@ -802,8 +814,8 @@ struct RealWeeklySummaryView: View {
     }
     
     private func getFocusArea() -> String {
-        let avgDeaths = matches.isEmpty ? 0 : matches.reduce(0) { $0 + $1.deaths } / matches.count
-        let avgKills = matches.isEmpty ? 0 : matches.reduce(0) { $0 + $1.kills } / matches.count
+        let avgDeaths = matches.isEmpty ? 0 : matches.reduce(into: 0) { $0 += $1.deaths } / matches.count
+        let avgKills = matches.isEmpty ? 0 : matches.reduce(into: 0) { $0 += $1.kills } / matches.count
         
         if avgDeaths > 8 {
             return "Survival"
@@ -815,8 +827,8 @@ struct RealWeeklySummaryView: View {
     }
     
     private func getFocusDescription() -> String {
-        let avgDeaths = matches.isEmpty ? 0 : matches.reduce(0) { $0 + $1.deaths } / matches.count
-        let avgKills = matches.isEmpty ? 0 : matches.reduce(0) { $0 + $1.kills } / matches.count
+        let avgDeaths = matches.isEmpty ? 0 : matches.reduce(into: 0) { $0 += $1.deaths } / matches.count
+        let avgKills = matches.isEmpty ? 0 : matches.reduce(into: 0) { $0 += $1.kills } / matches.count
         
         if avgDeaths > 8 {
             return "Avg \(avgDeaths) deaths - be more careful"
@@ -914,18 +926,18 @@ struct RealGoalProgressView: View {
     
     private func getKDAProgress() -> Double {
         guard !matches.isEmpty else { return 0.0 }
-        let avgKDA = matches.reduce(0.0) { total, match in
+        let avgKDA = matches.reduce(into: 0.0) { total, match in
             let kda = match.deaths > 0 ? (Double(match.kills + match.assists) / Double(match.deaths)) : Double(match.kills + match.assists)
-            return total + kda
+            total += kda
         } / Double(matches.count)
         
         return min(avgKDA / 2.5, 1.0)
     }
     
     private func getKDATarget() -> String {
-        let avgKDA = matches.reduce(0.0) { total, match in
+        let avgKDA = matches.reduce(into: 0.0) { total, match in
             let kda = match.deaths > 0 ? (Double(match.kills + match.assists) / Double(match.deaths)) : Double(match.kills + match.assists)
-            return total + kda
+            total += kda
         } / Double(matches.count)
         
         return String(format: "Current: %.1f", avgKDA)
@@ -1384,7 +1396,7 @@ struct RealHeroStatsRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(self.getHeroName(heroId: heroStats.heroId))
+                Text(HeroService.shared.getHeroName(heroId: heroStats.heroId))
                     .font(.headline)
                 
                 Spacer()
@@ -1437,153 +1449,6 @@ struct RealHeroStatsRow: View {
         .cornerRadius(8)
     }
     
-    private func getHeroName(heroId: Int) -> String {
-        // Complete hero name mapping from OpenDota API
-        switch heroId {
-        case 1: return "Anti-Mage"
-        case 2: return "Axe"
-        case 3: return "Bane"
-        case 4: return "Bloodseeker"
-        case 5: return "Crystal Maiden"
-        case 6: return "Drow Ranger"
-        case 7: return "Earthshaker"
-        case 8: return "Juggernaut"
-        case 9: return "Mirana"
-        case 10: return "Morphling"
-        case 11: return "Shadow Fiend"
-        case 12: return "Phantom Lancer"
-        case 13: return "Puck"
-        case 14: return "Pudge"
-        case 15: return "Razor"
-        case 16: return "Sand King"
-        case 17: return "Storm Spirit"
-        case 18: return "Sven"
-        case 19: return "Tiny"
-        case 20: return "Vengeful Spirit"
-        case 21: return "Windranger"
-        case 22: return "Zeus"
-        case 23: return "Kunkka"
-        case 25: return "Lina"
-        case 26: return "Lion"
-        case 27: return "Shadow Shaman"
-        case 28: return "Slardar"
-        case 29: return "Tidehunter"
-        case 30: return "Witch Doctor"
-        case 31: return "Lich"
-        case 32: return "Riki"
-        case 33: return "Enigma"
-        case 34: return "Tinker"
-        case 35: return "Sniper"
-        case 36: return "Necrophos"
-        case 37: return "Warlock"
-        case 38: return "Beastmaster"
-        case 39: return "Queen of Pain"
-        case 40: return "Venomancer"
-        case 41: return "Faceless Void"
-        case 42: return "Wraith King"
-        case 43: return "Death Prophet"
-        case 44: return "Phantom Assassin"
-        case 45: return "Pugna"
-        case 46: return "Templar Assassin"
-        case 47: return "Viper"
-        case 48: return "Luna"
-        case 49: return "Dragon Knight"
-        case 50: return "Dazzle"
-        default: return getHeroNamePart2(heroId: heroId)
-        }
-    }
-    
-    private func getHeroNamePart2(heroId: Int) -> String {
-        // Second part of hero mapping for compilation performance
-        switch heroId {
-        case 51: return "Clockwerk"
-        case 52: return "Leshrac"
-        case 53: return "Nature's Prophet"
-        case 54: return "Lifestealer"
-        case 55: return "Dark Seer"
-        case 56: return "Clinkz"
-        case 57: return "Omniknight"
-        case 58: return "Enchantress"
-        case 59: return "Huskar"
-        case 60: return "Night Stalker"
-        case 61: return "Broodmother"
-        case 62: return "Bounty Hunter"
-        case 63: return "Weaver"
-        case 64: return "Jakiro"
-        case 65: return "Batrider"
-        case 66: return "Chen"
-        case 67: return "Spectre"
-        case 68: return "Ancient Apparition"
-        case 69: return "Doom"
-        case 70: return "Ursa"
-        case 71: return "Spirit Breaker"
-        case 72: return "Gyrocopter"
-        case 73: return "Alchemist"
-        case 74: return "Invoker"
-        case 75: return "Silencer"
-        case 76: return "Outworld Destroyer"
-        case 77: return "Lycan"
-        case 78: return "Brewmaster"
-        case 79: return "Shadow Demon"
-        case 80: return "Lone Druid"
-        case 81: return "Chaos Knight"
-        case 82: return "Meepo"
-        case 83: return "Treant Protector"
-        case 84: return "Ogre Magi"
-        case 85: return "Undying"
-        case 86: return "Rubick"
-        case 87: return "Disruptor"
-        case 88: return "Nyx Assassin"
-        case 89: return "Naga Siren"
-        case 90: return "Keeper of the Light"
-        case 91: return "Io"
-        case 92: return "Visage"
-        case 93: return "Slark"
-        case 94: return "Medusa"
-        case 95: return "Troll Warlord"
-        case 96: return "Centaur Warrunner"
-        case 97: return "Magnus"
-        case 98: return "Timbersaw"
-        case 99: return "Bristleback"
-        case 100: return "Tusk"
-        default: return getHeroNamePart3(heroId: heroId)
-        }
-    }
-    
-    private func getHeroNamePart3(heroId: Int) -> String {
-        // Third part of hero mapping for compilation performance
-        switch heroId {
-        case 101: return "Skywrath Mage"
-        case 102: return "Abaddon"
-        case 103: return "Elder Titan"
-        case 104: return "Legion Commander"
-        case 105: return "Techies"
-        case 106: return "Ember Spirit"
-        case 107: return "Earth Spirit"
-        case 108: return "Underlord"
-        case 109: return "Terrorblade"
-        case 110: return "Phoenix"
-        case 111: return "Oracle"
-        case 112: return "Winter Wyvern"
-        case 113: return "Arc Warden"
-        case 114: return "Monkey King"
-        case 119: return "Dark Willow"
-        case 120: return "Pangolier"
-        case 121: return "Grimstroke"
-        case 123: return "Hoodwink"
-        case 126: return "Void Spirit"
-        case 128: return "Snapfire"
-        case 129: return "Mars"
-        case 131: return "Ringmaster"
-        case 135: return "Dawnbreaker"
-        case 136: return "Marci"
-        case 137: return "Primal Beast"
-        case 138: return "Muerta"
-        case 145: return "Kez"
-        default: return "Hero \(heroId)"
-        }
-    }
-    
     private func getWinRateColor(_ winRate: Double) -> Color {
         if winRate >= 0.7 { return .green }
         else if winRate >= 0.5 { return .orange }
@@ -1631,7 +1496,7 @@ struct RealHeroRecommendationsView: View {
         
         if !heroStats.isEmpty {
             let bestHero = heroStats.first!
-            let bestHeroName = self.getHeroName(heroId: bestHero.heroId)
+            let bestHeroName = HeroService.shared.getHeroName(heroId: bestHero.heroId)
             
             if bestHero.winRate >= 0.7 {
                 recommendations.append(HeroRecommendation(
@@ -1670,152 +1535,6 @@ struct RealHeroRecommendationsView: View {
         return recommendations
     }
     
-    private func getHeroName(heroId: Int) -> String {
-        // Complete hero name mapping from OpenDota API
-        switch heroId {
-        case 1: return "Anti-Mage"
-        case 2: return "Axe"
-        case 3: return "Bane"
-        case 4: return "Bloodseeker"
-        case 5: return "Crystal Maiden"
-        case 6: return "Drow Ranger"
-        case 7: return "Earthshaker"
-        case 8: return "Juggernaut"
-        case 9: return "Mirana"
-        case 10: return "Morphling"
-        case 11: return "Shadow Fiend"
-        case 12: return "Phantom Lancer"
-        case 13: return "Puck"
-        case 14: return "Pudge"
-        case 15: return "Razor"
-        case 16: return "Sand King"
-        case 17: return "Storm Spirit"
-        case 18: return "Sven"
-        case 19: return "Tiny"
-        case 20: return "Vengeful Spirit"
-        case 21: return "Windranger"
-        case 22: return "Zeus"
-        case 23: return "Kunkka"
-        case 25: return "Lina"
-        case 26: return "Lion"
-        case 27: return "Shadow Shaman"
-        case 28: return "Slardar"
-        case 29: return "Tidehunter"
-        case 30: return "Witch Doctor"
-        case 31: return "Lich"
-        case 32: return "Riki"
-        case 33: return "Enigma"
-        case 34: return "Tinker"
-        case 35: return "Sniper"
-        case 36: return "Necrophos"
-        case 37: return "Warlock"
-        case 38: return "Beastmaster"
-        case 39: return "Queen of Pain"
-        case 40: return "Venomancer"
-        case 41: return "Faceless Void"
-        case 42: return "Wraith King"
-        case 43: return "Death Prophet"
-        case 44: return "Phantom Assassin"
-        case 45: return "Pugna"
-        case 46: return "Templar Assassin"
-        case 47: return "Viper"
-        case 48: return "Luna"
-        case 49: return "Dragon Knight"
-        case 50: return "Dazzle"
-        default: return getHeroNamePart2(heroId: heroId)
-        }
-    }
-    
-    private func getHeroNamePart2(heroId: Int) -> String {
-        // Second part of hero mapping for compilation performance
-        switch heroId {
-        case 51: return "Clockwerk"
-        case 52: return "Leshrac"
-        case 53: return "Nature's Prophet"
-        case 54: return "Lifestealer"
-        case 55: return "Dark Seer"
-        case 56: return "Clinkz"
-        case 57: return "Omniknight"
-        case 58: return "Enchantress"
-        case 59: return "Huskar"
-        case 60: return "Night Stalker"
-        case 61: return "Broodmother"
-        case 62: return "Bounty Hunter"
-        case 63: return "Weaver"
-        case 64: return "Jakiro"
-        case 65: return "Batrider"
-        case 66: return "Chen"
-        case 67: return "Spectre"
-        case 68: return "Ancient Apparition"
-        case 69: return "Doom"
-        case 70: return "Ursa"
-        case 71: return "Spirit Breaker"
-        case 72: return "Gyrocopter"
-        case 73: return "Alchemist"
-        case 74: return "Invoker"
-        case 75: return "Silencer"
-        case 76: return "Outworld Destroyer"
-        case 77: return "Lycan"
-        case 78: return "Brewmaster"
-        case 79: return "Shadow Demon"
-        case 80: return "Lone Druid"
-        case 81: return "Chaos Knight"
-        case 82: return "Meepo"
-        case 83: return "Treant Protector"
-        case 84: return "Ogre Magi"
-        case 85: return "Undying"
-        case 86: return "Rubick"
-        case 87: return "Disruptor"
-        case 88: return "Nyx Assassin"
-        case 89: return "Naga Siren"
-        case 90: return "Keeper of the Light"
-        case 91: return "Io"
-        case 92: return "Visage"
-        case 93: return "Slark"
-        case 94: return "Medusa"
-        case 95: return "Troll Warlord"
-        case 96: return "Centaur Warrunner"
-        case 97: return "Magnus"
-        case 98: return "Timbersaw"
-        case 99: return "Bristleback"
-        case 100: return "Tusk"
-        default: return getHeroNamePart3(heroId: heroId)
-        }
-    }
-    
-    private func getHeroNamePart3(heroId: Int) -> String {
-        // Third part of hero mapping for compilation performance
-        switch heroId {
-        case 101: return "Skywrath Mage"
-        case 102: return "Abaddon"
-        case 103: return "Elder Titan"
-        case 104: return "Legion Commander"
-        case 105: return "Techies"
-        case 106: return "Ember Spirit"
-        case 107: return "Earth Spirit"
-        case 108: return "Underlord"
-        case 109: return "Terrorblade"
-        case 110: return "Phoenix"
-        case 111: return "Oracle"
-        case 112: return "Winter Wyvern"
-        case 113: return "Arc Warden"
-        case 114: return "Monkey King"
-        case 119: return "Dark Willow"
-        case 120: return "Pangolier"
-        case 121: return "Grimstroke"
-        case 123: return "Hoodwink"
-        case 126: return "Void Spirit"
-        case 128: return "Snapfire"
-        case 129: return "Mars"
-        case 131: return "Ringmaster"
-        case 135: return "Dawnbreaker"
-        case 136: return "Marci"
-        case 137: return "Primal Beast"
-        case 138: return "Muerta"
-        case 145: return "Kez"
-        default: return "Hero \(heroId)"
-        }
-    }
 
 }
 

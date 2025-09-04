@@ -409,3 +409,153 @@ struct HeroPerformanceStats {
     let averageScore: Double
     let lastPlayed: Date
 }
+
+// MARK: - Player Statistics Models (moved from OpenDotaService)
+struct PlayerStats: Codable {
+    let rankTier: Int?
+    let leaderboardRank: Int?
+    let profile: PlayerProfile?
+
+    enum CodingKeys: String, CodingKey {
+        case profile
+        case rankTier = "rank_tier"
+        case leaderboardRank = "leaderboard_rank"
+    }
+}
+
+struct PlayerProfile: Codable {
+    let accountId: Int64
+    let personaname: String?
+    let name: String?
+    let cheese: Int?
+    let steamid: String?
+    let avatar: String?
+    let avatarmedium: String?
+    let avatarfull: String?
+    let profileurl: String?
+    let lastLogin: String?
+    let loccountrycode: String?
+    let status: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case accountId = "account_id"
+        case personaname, name, cheese, steamid
+        case avatar, avatarmedium, avatarfull, profileurl
+        case lastLogin = "last_login"
+        case loccountrycode
+        case status
+    }
+}
+
+struct PlayerHeroStats: Codable {
+    let heroId: Int
+    let lastPlayed: Int
+    let games: Int
+    let win: Int
+    let withGames: Int
+    let withWin: Int
+    let againstGames: Int
+    let againstWin: Int
+
+    enum CodingKeys: String, CodingKey {
+        case heroId = "hero_id"
+        case lastPlayed = "last_played"
+        case games, win
+        case withGames = "with_games"
+        case withWin = "with_win"
+        case againstGames = "against_games"
+        case againstWin = "against_win"
+    }
+
+    var winRate: Double {
+        return games > 0 ? Double(win) / Double(games) : 0.0
+    }
+}
+
+struct PlayerTotal: Codable {
+    let field: String
+    let n: Int
+    let sum: Double  // Use Double to handle floating point numbers
+
+    var average: Double {
+        return n > 0 ? sum / Double(n) : 0.0
+    }
+}
+
+struct PlayerWinLoss: Codable {
+    let win: Int
+    let lose: Int
+    
+    // Calculate total matches
+    var totalMatches: Int {
+        return win + lose
+    }
+    
+    // Calculate win rate
+    var winRate: Double {
+        let total = totalMatches
+        return total > 0 ? Double(win) / Double(total) : 0.0
+    }
+    
+    // Format win rate display
+    var winRatePercentage: String {
+        return String(format: "%.1f%%", winRate * 100)
+    }
+}
+
+// MARK: - Player Counts Models
+struct PlayerCounts: Codable {
+    let leaverStatus: [LeaverStatusCount]
+    let gameMode: [GameModeCount]
+    let lobbyType: [LobbyTypeCount]
+    let region: [RegionCount]
+    let patch: [PatchCount]
+    
+    enum CodingKeys: String, CodingKey {
+        case leaverStatus = "leaver_status"
+        case gameMode = "game_mode"
+        case lobbyType = "lobby_type"
+        case region
+        case patch
+    }
+}
+
+struct LeaverStatusCount: Codable {
+    let leaverStatus: Int
+    let games: Int
+    
+    enum CodingKeys: String, CodingKey {
+        case leaverStatus = "leaver_status"
+        case games
+    }
+}
+
+struct GameModeCount: Codable {
+    let gameMode: Int
+    let games: Int
+    
+    enum CodingKeys: String, CodingKey {
+        case gameMode = "game_mode"
+        case games
+    }
+}
+
+struct LobbyTypeCount: Codable {
+    let lobbyType: Int
+    let games: Int
+    
+    enum CodingKeys: String, CodingKey {
+        case lobbyType = "lobby_type"
+        case games
+    }
+}
+
+struct RegionCount: Codable {
+    let region: Int
+    let games: Int
+}
+
+struct PatchCount: Codable {
+    let patch: Int
+    let games: Int
+}

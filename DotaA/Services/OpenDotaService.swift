@@ -58,6 +58,27 @@ class OpenDotaService: ObservableObject {
             .receive(on: DispatchQueue.main)
             .eraseToAnyPublisher()
     }
+    
+    // MARK: - Historical Matches for Best KDA
+    func getHistoricalMatches(accountId: Int64, limit: Int = 100) -> AnyPublisher<
+        [RecentMatch], Error
+    > {
+        guard
+            let url = URL(
+                string:
+                    "\(baseURL)/players/\(accountId)/matches?limit=\(limit)"
+            )
+        else {
+            return Fail(error: OpenDotaError.invalidURL)
+                .eraseToAnyPublisher()
+        }
+
+        return session.dataTaskPublisher(for: url)
+            .map(\.data)
+            .decode(type: [RecentMatch].self, decoder: JSONDecoder())
+            .receive(on: DispatchQueue.main)
+            .eraseToAnyPublisher()
+    }
 
     // MARK: - Match Details
     func getMatchDetails(matchId: Int64) -> AnyPublisher<Match, Error> {
@@ -114,15 +135,32 @@ class OpenDotaService: ObservableObject {
             .receive(on: DispatchQueue.main)
             .eraseToAnyPublisher()
     }
+    
+    // MARK: - Player Win/Loss Records
+    func getPlayerWinLoss(accountId: Int64) -> AnyPublisher<PlayerWinLoss, Error> {
+        guard let url = URL(string: "\(baseURL)/players/\(accountId)/wl") else {
+            return Fail(error: OpenDotaError.invalidURL)
+                .eraseToAnyPublisher()
+        }
+
+        return session.dataTaskPublisher(for: url)
+            .map(\.data)
+            .decode(type: PlayerWinLoss.self, decoder: JSONDecoder())
+            .receive(on: DispatchQueue.main)
+            .eraseToAnyPublisher()
+    }
 
     // MARK: - Player Heroes Performance
-    func getPlayerHeroes(accountId: Int64, limit: Int = 20) -> AnyPublisher<
+    func getPlayerHeroes(accountId: Int64, limit: Int? = nil) -> AnyPublisher<
         [PlayerHeroStats], Error
     > {
-        guard
-            let url = URL(
-                string: "\(baseURL)/players/\(accountId)/heroes?limit=\(limit)")
-        else {
+        let urlString = if let limit = limit {
+            "\(baseURL)/players/\(accountId)/heroes?limit=\(limit)"
+        } else {
+            "\(baseURL)/players/\(accountId)/heroes"
+        }
+        
+        guard let url = URL(string: urlString) else {
             return Fail(error: OpenDotaError.invalidURL)
                 .eraseToAnyPublisher()
         }
@@ -183,80 +221,7 @@ class OpenDotaService: ObservableObject {
     }
 }
 
-// MARK: - Supporting Data Models
-struct PlayerStats: Codable {
-
-    let rankTier: Int?
-    let leaderboardRank: Int?
-    let profile: PlayerProfile?
-
-    enum CodingKeys: String, CodingKey {
-
-        case profile
-
-        case rankTier = "rank_tier"
-        case leaderboardRank = "leaderboard_rank"
-    }
-}
-
-struct PlayerProfile: Codable {
-    let accountId: Int64
-    let personaname: String?
-    let name: String?
-    let cheese: Int?
-    let steamid: String?
-    let avatar: String?
-    let avatarmedium: String?
-    let avatarfull: String?
-    let profileurl: String?
-    let lastLogin: String?
-    let loccountrycode: String?
-    let status: Int?
-
-    enum CodingKeys: String, CodingKey {
-        case accountId = "account_id"
-        case personaname, name, cheese, steamid
-        case avatar, avatarmedium, avatarfull, profileurl
-        case lastLogin = "last_login"
-        case loccountrycode
-        case status
-    }
-}
-
-struct PlayerHeroStats: Codable {
-    let heroId: Int
-    let lastPlayed: Int
-    let games: Int
-    let win: Int
-    let withGames: Int
-    let withWin: Int
-    let againstGames: Int
-    let againstWin: Int
-
-    enum CodingKeys: String, CodingKey {
-        case heroId = "hero_id"
-        case lastPlayed = "last_played"
-        case games, win
-        case withGames = "with_games"
-        case withWin = "with_win"
-        case againstGames = "against_games"
-        case againstWin = "against_win"
-    }
-
-    var winRate: Double {
-        return games > 0 ? Double(win) / Double(games) : 0.0
-    }
-}
-
-struct PlayerTotal: Codable {
-    let field: String
-    let n: Int
-    let sum: Int
-
-    var average: Double {
-        return n > 0 ? Double(sum) / Double(n) : 0.0
-    }
-}
+    // MARK: - Data models moved to DotaModels.swift
 
 // MARK: - Error Handling
 enum OpenDotaError: Error, LocalizedError {

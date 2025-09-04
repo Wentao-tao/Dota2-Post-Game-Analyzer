@@ -109,7 +109,6 @@ class PerformanceAnalyzer: ObservableObject {
         let kda = player.kda
         let killsPerMin = Double(player.kills) / duration
         let deathsPerMin = Double(player.deaths) / duration
-        let heroDamagePerMin = Double(player.heroDamage) / duration
         
         var score: Double = 0
         
@@ -262,8 +261,8 @@ class PerformanceAnalyzer: ObservableObject {
             metrics.mapAwareness
         ]
         
-        return zip(weights, scores).reduce(0) { result, pair in
-            result + (pair.0 * pair.1)
+        return zip(weights, scores).reduce(into: 0) { result, pair in
+            result += (pair.0 * pair.1)
         }
     }
     
