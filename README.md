@@ -47,6 +47,8 @@ An AI-powered Dota 2 performance analysis tool that provides personalized coachi
 
 ## Setup Instructions
 
+⚠️ **Important Security Note**: Make sure to add `Secrets.xcconfig` to your `.gitignore` file to prevent accidentally committing your API key to the repository!
+
 ### Prerequisites
 1. Xcode 15.0 or later
 2. iOS 17.0 or later
@@ -54,16 +56,26 @@ An AI-powered Dota 2 performance analysis tool that provides personalized coachi
 
 ### Installation
 1. Clone the repository
-2. Open `DotaA.xcodeproj` in Xcode
-3. Configure your OpenAI API key:
-   - Open `Services/OpenAIService.swift`
-   - Replace `"YOUR_OPENAI_API_KEY"` with your actual API key
-   - Or configure it through the app's settings after installation
+2. Open `DotaAnaylst.xcodeproj` in Xcode
+3. **Configure your OpenAI API key**:
+   - Create a `DotaA/Secrets.xcconfig` file in your project
+   - Add your API key in the following format:
+     ```
+     OPENAI_API_KEY = your_openai_api_key_here
+     ```
+   - Ensure your `Info.plist` contains the following configuration:
+     ```xml
+     <key>OPENAI_API_KEY</key>
+     <string>$(OPENAI_API_KEY)</string>
+     ```
+   - **Important**: Do NOT commit the `Secrets.xcconfig` file to your Git repository
 
 ### Configuration
-1. **OpenAI API Key**: 
+1. **OpenAI API Key Setup**: 
    - Get your API key from [OpenAI Platform](https://platform.openai.com/)
-   - Add it in the app's Profile > Settings > OpenAI API Key
+   - Create the `DotaA/Secrets.xcconfig` file as described above
+   - Follow the format specified in the installation steps
+   - Ensure the file is excluded from version control (add to .gitignore)
    
 2. **Rate Limiting**: 
    - OpenDota API has rate limits (consider implementing caching)

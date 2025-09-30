@@ -5,8 +5,8 @@
 //  Created by Wentao Guo on 11/08/25.
 //
 
-import SwiftUI
 import Combine
+import SwiftUI
 
 struct PlayerSearchView: View {
     @StateObject private var openDotaService = OpenDotaService.shared
@@ -15,7 +15,7 @@ struct PlayerSearchView: View {
     @State private var isSearching = false
     @State private var errorMessage = ""
     @State private var cancellables = Set<AnyCancellable>()
-    
+
     var body: some View {
         NavigationView {
             VStack(spacing: 20) {
@@ -24,27 +24,31 @@ struct PlayerSearchView: View {
                     Text("Find Your Dota 2 Account")
                         .font(.title2)
                         .fontWeight(.bold)
-                    
-                    Text("Search for your Steam username or ID to view personal analytics")
-                        .font(.body)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
+
+                    Text(
+                        "Search for your Steam username or ID to view personal analytics"
+                    )
+                    .font(.body)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
                 }
                 .padding()
-                
+
                 // Search Bar
                 HStack {
                     Image(systemName: "magnifyingglass")
                         .foregroundColor(.gray)
-                    
+
                     TextField("Enter Steam username or ID", text: $searchText)
                         .textFieldStyle(RoundedBorderTextFieldStyle())
                         .onSubmit {
-                            if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            if !searchText.trimmingCharacters(
+                                in: .whitespacesAndNewlines
+                            ).isEmpty {
                                 searchPlayers()
                             }
                         }
-                    
+
                     if isSearching {
                         ProgressView()
                             .scaleEffect(0.8)
@@ -56,23 +60,27 @@ struct PlayerSearchView: View {
                     }
                 }
                 .padding(.horizontal)
-                
+
                 // Search Results
                 if !errorMessage.isEmpty {
                     ErrorView(message: errorMessage) {
                         searchPlayers()
                     }
                     .padding()
-                } else if searchResults.isEmpty && !searchText.isEmpty && !isSearching {
+                } else if searchResults.isEmpty && !searchText.isEmpty
+                    && !isSearching
+                {
                     VStack(spacing: 12) {
-                        Image(systemName: "person.crop.circle.badge.questionmark")
-                            .font(.system(size: 40))
-                            .foregroundColor(.gray)
-                        
+                        Image(
+                            systemName: "person.crop.circle.badge.questionmark"
+                        )
+                        .font(.system(size: 40))
+                        .foregroundColor(.gray)
+
                         Text("No Players Found")
                             .font(.headline)
                             .fontWeight(.bold)
-                        
+
                         Text("Try different keywords or check spelling")
                             .font(.body)
                             .foregroundColor(.secondary)
@@ -83,7 +91,10 @@ struct PlayerSearchView: View {
                     ScrollView {
                         LazyVStack(spacing: 12) {
                             ForEach(searchResults, id: \.accountId) { player in
-                                NavigationLink(destination: PlayerDetailView(player: player)) {
+                                NavigationLink(
+                                    destination: PlayerDetailView(
+                                        player: player)
+                                ) {
                                     PlayerSearchResultRow(player: player)
                                 }
                                 .buttonStyle(PlainButtonStyle())
@@ -92,9 +103,20 @@ struct PlayerSearchView: View {
                         .padding(.horizontal)
                     }
                 }
-                
+                if searchResults.isEmpty && searchText.isEmpty {
+                    Image("background1")
+                        .resizable()
+
+                        .scaledToFit()
+                        .scaleEffect(2)
+
+                        .opacity(0.8)
+
+                        .padding(.bottom, 20)
+                }
+        
                 Spacer()
-                
+
                 // Usage Tips
                 if searchResults.isEmpty && searchText.isEmpty {
                     VStack(spacing: 12) {
@@ -105,7 +127,7 @@ struct PlayerSearchView: View {
                                 .fontWeight(.semibold)
                                 .foregroundColor(.blue)
                         }
-                        
+
                         VStack(alignment: .leading, spacing: 8) {
                             Text("• Use your Steam display name")
                             Text("• Try partial usernames")
@@ -125,19 +147,22 @@ struct PlayerSearchView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
     }
-    
+
     private func searchPlayers() {
-        guard !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        
+        guard
+            !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return }
+
         isSearching = true
         errorMessage = ""
-        
+
         openDotaService.searchPlayer(query: searchText)
             .sink(
                 receiveCompletion: { completion in
                     isSearching = false
                     if case .failure(let error) = completion {
-                        errorMessage = "Search failed: \(error.localizedDescription)"
+                        errorMessage =
+                            "Search failed: \(error.localizedDescription)"
                     }
                 },
                 receiveValue: { results in
@@ -151,7 +176,7 @@ struct PlayerSearchView: View {
 // MARK: - Player Search Result Row
 struct PlayerSearchResultRow: View {
     let player: PlayerSearchResult
-    
+
     var body: some View {
         HStack(spacing: 12) {
             // Avatar
@@ -165,20 +190,20 @@ struct PlayerSearchResultRow: View {
             }
             .frame(width: 50, height: 50)
             .clipShape(Circle())
-            
+
             // Player Info
             VStack(alignment: .leading, spacing: 4) {
                 Text(player.personaname)
                     .font(.headline)
                     .lineLimit(1)
-                
+
                 Text("Steam ID: \(player.accountId)")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
-            
+
             Spacer()
-            
+
             // Selection indicator
             Image(systemName: "chevron.right")
                 .foregroundColor(.gray)
@@ -194,23 +219,23 @@ struct PlayerSearchResultRow: View {
 struct ErrorView: View {
     let message: String
     let retryAction: () -> Void
-    
+
     init(message: String, retryAction: @escaping () -> Void) {
         self.message = message
         self.retryAction = retryAction
     }
-    
+
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 50))
                 .foregroundColor(.orange)
-            
+
             Text(message)
                 .font(.body)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
-            
+
             Button("Retry") {
                 retryAction()
             }
@@ -227,7 +252,10 @@ struct ErrorView: View {
 }
 
 #Preview("Error View") {
-    ErrorView(message: "Unable to connect to server. Please check your internet connection.") {
+    ErrorView(
+        message:
+            "Unable to connect to server. Please check your internet connection."
+    ) {
         print("Retry tapped")
     }
     .padding()
